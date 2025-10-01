@@ -1,34 +1,41 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { InputSwitch } from "primereact/inputswitch";
+import { OverlayPanel } from "primereact/overlaypanel";
+import { Button } from "primereact/button";
+import { InputNumber } from "primereact/inputnumber";
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
 
 export const Home = () => {
   const [artworks, setArtworks] = useState([]);
-  const [selectedArtworks, setSelectedArtworks] = useState(null);
+  const [selectedArtworks, setSelectedArtworks] = useState([]);
   const [rowClick, setRowClick] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [first, setFirst] = useState(0);
+  const [selectCount, setSelectCount] = useState(null);
   const rowsPerPage = 12;
+  const overlayRef = useRef(null);
 
-  const fetchData = (offset) => {
+  const fetchData = async (offset) => {
     setLoading(true);
     const page = Math.floor(offset / rowsPerPage) + 1;
 
-    fetch(`https://api.artic.edu/api/v1/artworks?page=${page}&limit=${rowsPerPage}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setArtworks(data.data);
-        setTotalRecords(data.pagination.total);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching data:", err);
-        setLoading(false);
-      });
+    try {
+      const res = await fetch(
+        `https://api.artic.edu/api/v1/artworks?page=${page}&limit=${rowsPerPage}`
+      );
+      const data = await res.json();
+      setArtworks(data.data);
+      setTotalRecords(data.pagination.total);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -38,6 +45,42 @@ export const Home = () => {
   const onPageChange = (e) => {
     setFirst(e.first);
   };
+
+  const handleSelectSubmit = async () => {
+    if (!selectCount || selectCount <= 0) return;
+
+    const currentPage = Math.floor(first / rowsPerPage) + 1;
+    const currentData = [...artworks];
+    let selected = [];
+
+    if (selectCount <= currentData.length) {
+      selected = currentData.slice(0, selectCount);
+    } else {
+      const remaining = selectCount - currentData.length;
+      selected = [...currentData];
+
+      const nextPage = currentPage + 1;
+      const res = await fetch(
+        `https://api.artic.edu/api/v1/artworks?page=${nextPage}&limit=${rowsPerPage}`
+      );
+      const data = await res.json();
+      selected = [...selected, ...data.data.slice(0, remaining)];
+    }
+
+    setSelectedArtworks(selected);
+    overlayRef.current.hide();
+  };
+
+  const headerTemplate = () => (
+    <div className="flex items-center gap-2">
+      <i
+        className="pi pi-chevron-down text-black cursor-pointer"
+        style={{ fontSize: "1.2rem" }}
+        onClick={(e) => overlayRef.current.toggle(e)}
+      />
+      <span>🎨 Title</span>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-700 p-6">
@@ -77,7 +120,7 @@ export const Home = () => {
           totalRecords={totalRecords}
           first={first}
           onPage={onPageChange}
-          selectionMode={rowClick ? null : "checkbox"}
+          selectionMode={rowClick ? "checkbox" : null }
           selection={selectedArtworks}
           onSelectionChange={(e) => setSelectedArtworks(e.value)}
           dataKey="id"
@@ -85,12 +128,12 @@ export const Home = () => {
           className="min-w-full text-sm"
           tableStyle={{ tableLayout: "fixed" }}
         >
-          {!rowClick && (
+          {rowClick && (
             <Column selectionMode="multiple" headerStyle={{ width: "3rem" }} />
           )}
           <Column
             field="title"
-            header="🎨 Title"
+            header={headerTemplate()}
             headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
             bodyClassName="px-4 py-2 font-medium text-gray-800"
           />
@@ -125,6 +168,24 @@ export const Home = () => {
             bodyClassName="px-4 py-2 text-right text-gray-700"
           />
         </DataTable>
+
+        <OverlayPanel ref={overlayRef}>
+          <div className="p-3 w-84">
+            <label htmlFor="rowCount" className="block mb-2 text-sm font-medium text-gray-700">
+              Select number of rows
+            </label>
+            <InputNumber
+              id="rowCount"
+              value={selectCount}
+              onValueChange={(e) => setSelectCount(e.value)}
+              showButtons
+              min={1}
+              max={rowsPerPage * 2}
+              className="w-full mb-3"
+            />
+            <Button label="Submit" icon="pi pi-check" onClick={handleSelectSubmit} className="w-full" />
+          </div>
+        </OverlayPanel>
       </div>
     </div>
   );
