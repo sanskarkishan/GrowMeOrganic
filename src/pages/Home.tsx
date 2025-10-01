@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
+import { InputSwitch } from "primereact/inputswitch";
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 
 export const Home = () => {
   const [artworks, setArtworks] = useState([]);
+  const [selectedArtworks, setSelectedArtworks] = useState(null);
+  const [rowClick, setRowClick] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
-  const [first, setFirst] = useState(0); // offset for paginator
+  const [first, setFirst] = useState(0);
   const rowsPerPage = 12;
 
   const fetchData = (offset) => {
@@ -43,6 +46,17 @@ export const Home = () => {
       </h1>
 
       <div className="bg-white rounded-xl shadow-lg p-4 overflow-x-auto">
+        <div className="flex items-center gap-3 mb-4">
+          <InputSwitch
+            inputId="input-rowclick"
+            checked={rowClick}
+            onChange={(e) => setRowClick(e.value)}
+          />
+          <label htmlFor="input-rowclick" className="text-sm text-gray-700">
+            Row Click Selection
+          </label>
+        </div>
+
         <p className="text-sm text-gray-600 mb-2">
           Showing page{" "}
           <span className="font-semibold text-indigo-600">
@@ -63,10 +77,17 @@ export const Home = () => {
           totalRecords={totalRecords}
           first={first}
           onPage={onPageChange}
+          selectionMode={rowClick ? null : "checkbox"}
+          selection={selectedArtworks}
+          onSelectionChange={(e) => setSelectedArtworks(e.value)}
+          dataKey="id"
           stripedRows
           className="min-w-full text-sm"
           tableStyle={{ tableLayout: "fixed" }}
         >
+          {!rowClick && (
+            <Column selectionMode="multiple" headerStyle={{ width: "3rem" }} />
+          )}
           <Column
             field="title"
             header="🎨 Title"
