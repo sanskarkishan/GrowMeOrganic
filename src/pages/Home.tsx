@@ -7,21 +7,15 @@ import { Button } from "primereact/button";
 import { InputNumber } from "primereact/inputnumber";
 import { ProgressSpinner } from "primereact/progressspinner";
 
+import { fetchArtworks, fetchMultipleArtworks } from "../api/api";
+
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
-// 👇 Local type for pagination event (PrimeReact doesn't export this)
-interface PageEvent {
-  first: number;
-  rows: number;
-  page: number;
-  pageCount: number;
-}
-
-export const Home: React.FC = () => {
-  const [artworks, setArtworks] = useState<any[]>([]);
-  const [selectedArtworks, setSelectedArtworks] = useState<any[]>([]);
+export const Home = () => {
+  const [artworks, setArtworks] = useState([]);
+  const [selectedArtworks, setSelectedArtworks] = useState([]);
   const [rowClick, setRowClick] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -32,62 +26,41 @@ export const Home: React.FC = () => {
   const rowsPerPage = 12;
   const overlayRef = useRef<OverlayPanel>(null);
 
-  // ✅ fetch one page
-  const fetchData = async (offset: number) => {
-    setLoading(true);
-    const page = Math.floor(offset / rowsPerPage) + 1;
-
-    try {
-      const res = await fetch(
-        `https://api.artic.edu/api/v1/artworks?page=${page}&limit=${rowsPerPage}`
-      );
-      const data = await res.json();
-      setArtworks(data.data);
-      setTotalRecords(data.pagination.total);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData(first);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const page = Math.floor(first / rowsPerPage) + 1;
+        const data = await fetchArtworks(page, rowsPerPage);
+        setArtworks(data.data);
+        setTotalRecords(data.pagination.total);
+      } catch (err) {
+        console.error("Error fetching artworks:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
   }, [first]);
 
-  // ✅ pagination handler
-  const onPageChange = (e: PageEvent) => {
+  const onPageChange = (e: any) => {
     setFirst(e.first);
   };
 
-  // ✅ Fetch multiple pages until enough rows are selected
   const handleSelectSubmit = async () => {
     if (!selectCount || selectCount <= 0) return;
-
     setBulkLoading(true);
-    let selected: any[] = [];
-    let remaining = selectCount;
-    let currentPage = Math.floor(first / rowsPerPage) + 1;
-
     try {
-      while (remaining > 0) {
-        const res = await fetch(
-          `https://api.artic.edu/api/v1/artworks?page=${currentPage}&limit=${rowsPerPage}`
-        );
-        const data = await res.json();
-
-        if (!data.data || data.data.length === 0) break; // stop if no more
-
-        const needed = data.data.slice(0, remaining);
-        selected = [...selected, ...needed];
-        remaining -= needed.length;
-        currentPage++;
-      }
-
+      const currentPage = Math.floor(first / rowsPerPage) + 1;
+      const selected = await fetchMultipleArtworks(
+        currentPage,
+        selectCount,
+        rowsPerPage
+      );
       setSelectedArtworks(selected);
       overlayRef.current?.hide();
     } catch (err) {
-      console.error("Error fetching multiple pages:", err);
+      console.error("Error fetching multiple artworks:", err);
     } finally {
       setBulkLoading(false);
     }
@@ -105,26 +78,29 @@ export const Home: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-700 p-6">
-      <h1 className="text-4xl font-bold text-center text-white mb-10 underline">
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-700 p-4 sm:p-6">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center text-white mb-6 sm:mb-10 underline">
         Assignment for Internship – GrowMeOrganic
       </h1>
 
-      <div className="bg-white rounded-xl shadow-lg p-4 overflow-x-auto">
-        {/* Row click toggle */}
-        <div className="flex items-center gap-3 mb-4">
+      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 overflow-x-auto">
+        {/* Toggle */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 mb-4">
           <InputSwitch
             inputId="input-rowclick"
             checked={rowClick}
-            onChange={(e) => setRowClick(e.value as boolean)}
+            onChange={(e) => setRowClick(e.value)}
           />
-          <label htmlFor="input-rowclick" className="text-sm text-gray-700">
+          <label
+            htmlFor="input-rowclick"
+            className="text-sm sm:text-base text-gray-700"
+          >
             Row Click Selection
           </label>
         </div>
 
         {/* Pagination info */}
-        <p className="text-sm text-gray-600 mb-2">
+        <p className="text-sm sm:text-base text-gray-600 mb-2">
           Showing page{" "}
           <span className="font-semibold text-indigo-600">
             {Math.floor(first / rowsPerPage) + 1}
@@ -136,70 +112,75 @@ export const Home: React.FC = () => {
         </p>
 
         {/* DataTable */}
-        <DataTable
-          value={artworks}
-          loading={loading}
-          paginator
-          lazy
-          rows={rowsPerPage}
-          totalRecords={totalRecords}
-          first={first}
-          onPage={onPageChange}
-          selectionMode={rowClick ? "checkbox" : undefined}
-          selection={selectedArtworks}
-          onSelectionChange={(e) => setSelectedArtworks(e.value)}
-          dataKey="id"
-          stripedRows
-          className="min-w-full text-sm"
-          tableStyle={{ tableLayout: "fixed" }}
-        >
-          {rowClick && (
-            <Column selectionMode="multiple" headerStyle={{ width: "3rem" }} />
-          )}
-          <Column
-            field="title"
-            header={headerTemplate}
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
-            bodyClassName="px-4 py-2 font-medium text-gray-800"
-          />
-          <Column
-            field="place_of_origin"
-            header="🌍 Origin"
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
-            bodyClassName="px-4 py-2 text-gray-700"
-          />
-          <Column
-            field="artist_display"
-            header="👤 Artist"
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
-            bodyClassName="px-4 py-2 text-gray-700 truncate max-w-xs"
-          />
-          <Column
-            field="inscriptions"
-            header="✍️ Inscriptions"
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
-            bodyClassName="px-4 py-2 text-gray-700 truncate max-w-xs"
-          />
-          <Column
-            field="date_start"
-            header="📅 Start"
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-right"
-            bodyClassName="px-4 py-2 text-right text-gray-700"
-          />
-          <Column
-            field="date_end"
-            header="📅 End"
-            headerClassName="bg-indigo-500 text-white px-4 py-2 text-right"
-            bodyClassName="px-4 py-2 text-right text-gray-700"
-          />
-        </DataTable>
+        <div className="overflow-x-auto">
+          <DataTable
+            value={artworks}
+            loading={loading}
+            paginator
+            lazy
+            rows={rowsPerPage}
+            totalRecords={totalRecords}
+            first={first}
+            onPage={onPageChange}
+            selectionMode={rowClick ? "checkbox" : undefined}
+            selection={selectedArtworks}
+            onSelectionChange={(e) => setSelectedArtworks(e.value)}
+            dataKey="id"
+            stripedRows
+            className="min-w-[600px] text-sm sm:text-base"
+            tableStyle={{ tableLayout: "auto" }}
+          >
+            {rowClick && (
+              <Column
+                selectionMode="multiple"
+                headerStyle={{ width: "3rem" }}
+              />
+            )}
+            <Column
+              field="title"
+              header={headerTemplate}
+              headerClassName="bg-indigo-500 text-white px-2 sm:px-4 py-2 text-left"
+              bodyClassName="px-2 sm:px-4 py-2 font-medium text-gray-800"
+            />
+            <Column
+              field="place_of_origin"
+              header="Origin"
+              headerClassName="bg-indigo-500 text-white px-2 sm:px-4 py-2 text-left"
+              bodyClassName="px-2 sm:px-4 py-2 text-gray-700"
+            />
+            <Column
+              field="artist_display"
+              header="👤 Artist"
+              headerClassName="bg-indigo-500 text-white px-2 sm:px-4 py-2 text-left"
+              bodyClassName="px-2 sm:px-4 py-2 text-gray-700"
+            />
+            <Column
+              field="inscriptions"
+              header="✍️ Inscriptions"
+              headerClassName="bg-indigo-500 text-white px-2 sm:px-4 py-2 text-left"
+              bodyClassName="px-2 sm:px-4 py-2 text-gray-700"
+            />
+            <Column
+              field="date_start"
+              header="Start"
+              headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
+              bodyClassName="px-4 py-2 text-right text-gray-700"
+            />{" "}
+            <Column
+              field="date_end"
+              header="End"
+              headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
+              bodyClassName="px-4 py-2 text-right text-gray-700"
+            />
+          </DataTable>
+        </div>
 
-        {/* Overlay Panel for multi-select */}
+        {/* Overlay Panel */}
         <OverlayPanel ref={overlayRef}>
-          <div className="p-3 w-84">
+          <div className="p-3 w-72 sm:w-80">
             <label
               htmlFor="rowCount"
-              className="block mb-2 text-sm font-medium text-gray-700"
+              className="block mb-2 text-sm sm:text-base font-medium text-gray-700"
             >
               Select number of rows
             </label>
@@ -209,7 +190,7 @@ export const Home: React.FC = () => {
               onValueChange={(e) => setSelectCount(e.value ?? null)}
               showButtons
               min={1}
-              max={totalRecords} // ✅ allow up to total records
+              max={totalRecords}
               className="w-full mb-3"
             />
 
