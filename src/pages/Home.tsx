@@ -5,22 +5,35 @@ import { InputSwitch } from "primereact/inputswitch";
 import { OverlayPanel } from "primereact/overlaypanel";
 import { Button } from "primereact/button";
 import { InputNumber } from "primereact/inputnumber";
+import { ProgressSpinner } from "primereact/progressspinner";
+
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
-export const Home = () => {
-  const [artworks, setArtworks] = useState([]);
-  const [selectedArtworks, setSelectedArtworks] = useState([]);
+// 👇 Local type for pagination event (PrimeReact doesn't export this)
+interface PageEvent {
+  first: number;
+  rows: number;
+  page: number;
+  pageCount: number;
+}
+
+export const Home: React.FC = () => {
+  const [artworks, setArtworks] = useState<any[]>([]);
+  const [selectedArtworks, setSelectedArtworks] = useState<any[]>([]);
   const [rowClick, setRowClick] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [first, setFirst] = useState(0);
-  const [selectCount, setSelectCount] = useState(null);
-  const rowsPerPage = 12;
-  const overlayRef = useRef(null);
+  const [selectCount, setSelectCount] = useState<number | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
-  const fetchData = async (offset) => {
+  const rowsPerPage = 12;
+  const overlayRef = useRef<OverlayPanel>(null);
+
+  // ✅ fetch one page
+  const fetchData = async (offset: number) => {
     setLoading(true);
     const page = Math.floor(offset / rowsPerPage) + 1;
 
@@ -42,33 +55,42 @@ export const Home = () => {
     fetchData(first);
   }, [first]);
 
-  const onPageChange = (e) => {
+  // ✅ pagination handler
+  const onPageChange = (e: PageEvent) => {
     setFirst(e.first);
   };
 
+  // ✅ Fetch multiple pages until enough rows are selected
   const handleSelectSubmit = async () => {
     if (!selectCount || selectCount <= 0) return;
 
-    const currentPage = Math.floor(first / rowsPerPage) + 1;
-    const currentData = [...artworks];
-    let selected = [];
+    setBulkLoading(true);
+    let selected: any[] = [];
+    let remaining = selectCount;
+    let currentPage = Math.floor(first / rowsPerPage) + 1;
 
-    if (selectCount <= currentData.length) {
-      selected = currentData.slice(0, selectCount);
-    } else {
-      const remaining = selectCount - currentData.length;
-      selected = [...currentData];
+    try {
+      while (remaining > 0) {
+        const res = await fetch(
+          `https://api.artic.edu/api/v1/artworks?page=${currentPage}&limit=${rowsPerPage}`
+        );
+        const data = await res.json();
 
-      const nextPage = currentPage + 1;
-      const res = await fetch(
-        `https://api.artic.edu/api/v1/artworks?page=${nextPage}&limit=${rowsPerPage}`
-      );
-      const data = await res.json();
-      selected = [...selected, ...data.data.slice(0, remaining)];
+        if (!data.data || data.data.length === 0) break; // stop if no more
+
+        const needed = data.data.slice(0, remaining);
+        selected = [...selected, ...needed];
+        remaining -= needed.length;
+        currentPage++;
+      }
+
+      setSelectedArtworks(selected);
+      overlayRef.current?.hide();
+    } catch (err) {
+      console.error("Error fetching multiple pages:", err);
+    } finally {
+      setBulkLoading(false);
     }
-
-    setSelectedArtworks(selected);
-    overlayRef.current.hide();
   };
 
   const headerTemplate = () => (
@@ -76,7 +98,7 @@ export const Home = () => {
       <i
         className="pi pi-chevron-down text-black cursor-pointer"
         style={{ fontSize: "1.2rem" }}
-        onClick={(e) => overlayRef.current.toggle(e)}
+        onClick={(e) => overlayRef.current?.toggle(e)}
       />
       <span>🎨 Title</span>
     </div>
@@ -89,17 +111,19 @@ export const Home = () => {
       </h1>
 
       <div className="bg-white rounded-xl shadow-lg p-4 overflow-x-auto">
+        {/* Row click toggle */}
         <div className="flex items-center gap-3 mb-4">
           <InputSwitch
             inputId="input-rowclick"
             checked={rowClick}
-            onChange={(e) => setRowClick(e.value)}
+            onChange={(e) => setRowClick(e.value as boolean)}
           />
           <label htmlFor="input-rowclick" className="text-sm text-gray-700">
             Row Click Selection
           </label>
         </div>
 
+        {/* Pagination info */}
         <p className="text-sm text-gray-600 mb-2">
           Showing page{" "}
           <span className="font-semibold text-indigo-600">
@@ -111,6 +135,7 @@ export const Home = () => {
           </span>
         </p>
 
+        {/* DataTable */}
         <DataTable
           value={artworks}
           loading={loading}
@@ -120,7 +145,7 @@ export const Home = () => {
           totalRecords={totalRecords}
           first={first}
           onPage={onPageChange}
-          selectionMode={rowClick ? "checkbox" : null }
+          selectionMode={rowClick ? "checkbox" : undefined}
           selection={selectedArtworks}
           onSelectionChange={(e) => setSelectedArtworks(e.value)}
           dataKey="id"
@@ -133,7 +158,7 @@ export const Home = () => {
           )}
           <Column
             field="title"
-            header={headerTemplate()}
+            header={headerTemplate}
             headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
             bodyClassName="px-4 py-2 font-medium text-gray-800"
           />
@@ -169,21 +194,37 @@ export const Home = () => {
           />
         </DataTable>
 
+        {/* Overlay Panel for multi-select */}
         <OverlayPanel ref={overlayRef}>
           <div className="p-3 w-84">
-            <label htmlFor="rowCount" className="block mb-2 text-sm font-medium text-gray-700">
+            <label
+              htmlFor="rowCount"
+              className="block mb-2 text-sm font-medium text-gray-700"
+            >
               Select number of rows
             </label>
             <InputNumber
               id="rowCount"
               value={selectCount}
-              onValueChange={(e) => setSelectCount(e.value)}
+              onValueChange={(e) => setSelectCount(e.value ?? null)}
               showButtons
               min={1}
-              max={rowsPerPage * 2}
+              max={totalRecords} // ✅ allow up to total records
               className="w-full mb-3"
             />
-            <Button label="Submit" icon="pi pi-check" onClick={handleSelectSubmit} className="w-full" />
+
+            {bulkLoading ? (
+              <div className="flex justify-center py-4">
+                <ProgressSpinner style={{ width: "40px", height: "40px" }} />
+              </div>
+            ) : (
+              <Button
+                label="Submit"
+                icon="pi pi-check"
+                onClick={handleSelectSubmit}
+                className="w-full"
+              />
+            )}
           </div>
         </OverlayPanel>
       </div>
