@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { InputSwitch } from "primereact/inputswitch";
@@ -13,9 +13,20 @@ import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
+// ✅ Define Artwork type here instead of importing
+interface Artwork {
+  id: number;
+  title: string;
+  place_of_origin: string;
+  artist_display: string;
+  inscriptions: string;
+  date_start: number;
+  date_end: number;
+}
+
 export const Home = () => {
-  const [artworks, setArtworks] = useState([]);
-  const [selectedArtworks, setSelectedArtworks] = useState([]);
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [selectedArtworks, setSelectedArtworks] = useState<Artwork[]>([]);
   const [rowClick, setRowClick] = useState(true);
   const [loading, setLoading] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -32,7 +43,7 @@ export const Home = () => {
       try {
         const page = Math.floor(first / rowsPerPage) + 1;
         const data = await fetchArtworks(page, rowsPerPage);
-        setArtworks(data.data);
+        setArtworks(data.data as Artwork[]);
         setTotalRecords(data.pagination.total);
       } catch (err) {
         console.error("Error fetching artworks:", err);
@@ -57,7 +68,7 @@ export const Home = () => {
         selectCount,
         rowsPerPage
       );
-      setSelectedArtworks(selected);
+      setSelectedArtworks(selected as Artwork[]);
       overlayRef.current?.hide();
     } catch (err) {
       console.error("Error fetching multiple artworks:", err);
@@ -113,7 +124,7 @@ export const Home = () => {
 
         {/* DataTable */}
         <div className="overflow-x-auto">
-          <DataTable
+          <DataTable<Artwork>
             value={artworks}
             loading={loading}
             paginator
@@ -122,9 +133,11 @@ export const Home = () => {
             totalRecords={totalRecords}
             first={first}
             onPage={onPageChange}
-            selectionMode={rowClick ? "checkbox" : undefined}
+            selectionMode={rowClick ? "checkbox" : null}
             selection={selectedArtworks}
-            onSelectionChange={(e) => setSelectedArtworks(e.value)}
+            onSelectionChange={(e) =>
+              setSelectedArtworks(e.value as Artwork[])
+            }
             dataKey="id"
             stripedRows
             className="min-w-[600px] text-sm sm:text-base"
@@ -165,7 +178,7 @@ export const Home = () => {
               header="Start"
               headerClassName="bg-indigo-500 text-white px-4 py-2 text-left"
               bodyClassName="px-4 py-2 text-right text-gray-700"
-            />{" "}
+            />
             <Column
               field="date_end"
               header="End"
