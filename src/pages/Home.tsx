@@ -7,22 +7,11 @@ import { Button } from "primereact/button";
 import { InputNumber } from "primereact/inputnumber";
 import { ProgressSpinner } from "primereact/progressspinner";
 
-import { fetchArtworks, fetchMultipleArtworks } from "../api/api";
+import { fetchArtworks, fetchMultipleArtworks, type Artwork } from "../api/api";
 
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
-
-// ✅ Define Artwork type here instead of importing
-interface Artwork {
-  id: number;
-  title: string;
-  place_of_origin: string;
-  artist_display: string;
-  inscriptions: string;
-  date_start: number;
-  date_end: number;
-}
 
 export const Home = () => {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -43,7 +32,7 @@ export const Home = () => {
       try {
         const page = Math.floor(first / rowsPerPage) + 1;
         const data = await fetchArtworks(page, rowsPerPage);
-        setArtworks(data.data as Artwork[]);
+        setArtworks(data.data);
         setTotalRecords(data.pagination.total);
       } catch (err) {
         console.error("Error fetching artworks:", err);
@@ -54,7 +43,7 @@ export const Home = () => {
     loadData();
   }, [first]);
 
-  const onPageChange = (e: any) => {
+  const onPageChange = (e: { first: number }) => {
     setFirst(e.first);
   };
 
@@ -63,12 +52,8 @@ export const Home = () => {
     setBulkLoading(true);
     try {
       const currentPage = Math.floor(first / rowsPerPage) + 1;
-      const selected = await fetchMultipleArtworks(
-        currentPage,
-        selectCount,
-        rowsPerPage
-      );
-      setSelectedArtworks(selected as Artwork[]);
+      const selected = await fetchMultipleArtworks(currentPage, selectCount, rowsPerPage);
+      setSelectedArtworks(selected);
       overlayRef.current?.hide();
     } catch (err) {
       console.error("Error fetching multiple artworks:", err);
@@ -81,6 +66,7 @@ export const Home = () => {
     <div className="flex items-center gap-2">
       <i
         className="pi pi-chevron-down text-black cursor-pointer"
+        title="Select rows"
         style={{ fontSize: "1.2rem" }}
         onClick={(e) => overlayRef.current?.toggle(e)}
       />
@@ -102,10 +88,7 @@ export const Home = () => {
             checked={rowClick}
             onChange={(e) => setRowClick(e.value)}
           />
-          <label
-            htmlFor="input-rowclick"
-            className="text-sm sm:text-base text-gray-700"
-          >
+          <label htmlFor="input-rowclick" className="text-sm sm:text-base text-gray-700">
             Row Click Selection
           </label>
         </div>
@@ -124,7 +107,7 @@ export const Home = () => {
 
         {/* DataTable */}
         <div className="overflow-x-auto">
-          <DataTable<Artwork>
+          <DataTable
             value={artworks}
             loading={loading}
             paginator
@@ -134,9 +117,11 @@ export const Home = () => {
             first={first}
             onPage={onPageChange}
             selectionMode={rowClick ? "checkbox" : null}
-            selection={selectedArtworks}
-            onSelectionChange={(e) =>
-              setSelectedArtworks(e.value as Artwork[])
+            selection={rowClick ? selectedArtworks : []}
+            onSelectionChange={
+              rowClick
+                ? (e: { value: Artwork[] }) => setSelectedArtworks(e.value)
+                : undefined
             }
             dataKey="id"
             stripedRows
@@ -144,10 +129,7 @@ export const Home = () => {
             tableStyle={{ tableLayout: "auto" }}
           >
             {rowClick && (
-              <Column
-                selectionMode="multiple"
-                headerStyle={{ width: "3rem" }}
-              />
+              <Column selectionMode="multiple" headerStyle={{ width: "3rem" }} />
             )}
             <Column
               field="title"
